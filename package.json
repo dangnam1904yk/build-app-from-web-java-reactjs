@@ -1,0 +1,69 @@
+{
+  "name": "manager-studio",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "electron-pack-win": "electron-builder --win",
+    "electron-pack-mac": "electron-builder --mac",
+    "electron-pack-linux": "electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^41.7.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.nam.managerstudio",
+    "productName": "Manager Studio",
+    "directories": {
+      "output": "out"
+    },
+    "files": [
+      "main.js",
+      "frontend/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "backend/app.jar",
+        "to": "backend/app.jar"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico",
+      "extraResources": [
+        {
+          "from": "backend/jre-win/",
+          "to": "backend/jre/"
+        }
+      ]
+    },
+    "mac": {
+      "target": ["tar.gz"],
+      "extraResources": [
+        {
+          "from": "backend/jre-mac/",
+          "to": "backend/jre/"
+        }
+      ]
+    },
+    "linux": {
+      "target": ["tar.gz"],
+      "extraResources": [
+        {
+          "from": "backend/jre-linux/",
+          "to": "backend/jre/"
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Manager Studio"
+    }
+  }
+}
