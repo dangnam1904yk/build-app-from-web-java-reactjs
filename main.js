@@ -36,12 +36,58 @@ function startBackend() {
     }
 
     // Kích hoạt Spring Boot chạy ngầm
+    const fs = require('fs');
+    if (process.platform !== 'win32') {
+        try {
+            fs.chmodSync(javaBin, 0o755);
+        } catch (err) {
+            console.error("Lỗi cấp quyền thực thi cho Java:", err);
+        }
+    }
     springBootProcess = spawn(javaBin, ['-jar', jarPath]);
 
+    // springBootProcess.stdout.on('data', (data) => {
+    //     console.log(`Spring Boot: ${data}`);
+    // });
+
     springBootProcess.stdout.on('data', (data) => {
-        console.log(`Spring Boot: ${data}`);
+        const logOutput = data.toString();
+        // In log ra để dễ debug
+        console.log(`[Backend]: ${logOutput}`);
+
+        // Dùng Regex tìm dòng log: "Tomcat started on port(s): 54321 (http)"
+        const portMatch = logOutput.match(/Tomcat started on port\(s\):\s*(\d+)/);
+        
+        if (portMatch) {
+            const actualPort = portMatch[1]; // Lấy con số nhóm đầu tiên trong Regex
+            console.log(`⚡ Bắt được cổng Backend đang chạy: ${actualPort}`);
+            
+            // 3. CHỈ MỞ GIAO DIỆN REACT KHI ĐÃ LẤY ĐƯỢC CỔNG
+            if (!mainWindow) {
+                createReactWindow(actualPort);
+            }
+        }
+    })
+}
+
+
+function createReactWindow(backendPort) {
+    mainWindow = new BrowserWindow({
+        width: 1200,
+        height: 800,
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false
+        }
+    });
+
+    // TRUYỀN PORT VÀO REACTJS THÔNG QUA URL QUERY STRING
+    // Hàm này sẽ tạo ra đường dẫn: file://.../frontend/index.html?apiPort=54321
+    mainWindow.loadFile(path.join(__dirname, 'frontend', 'index.html'), {
+        search: `apiPort=${backendPort}` 
     });
 }
+
 
 app.on('ready', () => {
     startBackend();
