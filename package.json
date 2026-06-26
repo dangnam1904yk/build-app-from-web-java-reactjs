@@ -41,10 +41,15 @@
       ]
     },
     "mac": {
-      "target": ["tar.gz"],
+      "target": [
+        {
+          "target": "tar.gz",
+          "arch": ["x64", "arm64"]
+        }
+      ],
       "extraResources": [
         {
-          "from": "backend/jre-mac/",
+          "from": "backend/jre-mac-${arch}/",
           "to": "backend/jre/"
         }
       ]
