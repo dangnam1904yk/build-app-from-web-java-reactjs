@@ -1,7 +1,23 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
+const log = require('electron-log');
 
+// Cấu hình ghi log ra file
+log.transports.file.level = 'info';
+log.transports.file.maxSize = 20 * 1024 * 1024; // Nâng dung lượng tối đa lên 20MB
+// Ghi đè các hàm console cơ bản (console.log, console.error...) để tự động lưu vào file
+Object.assign(console, log.functions);
+
+// Bắt lỗi hệ thống chưa được xử lý (tránh crash ngầm mà không có log)
+process.on('uncaughtException', (error) => {
+    log.error('Uncaught Exception:', error);
+});
+process.on('unhandledRejection', (error) => {
+    log.error('Unhandled Rejection:', error);
+});
+
+log.info('--- KHỞI ĐỘNG ỨNG DỤNG ---');
 ipcMain.handle('dialog:openDirectory', async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({
         properties: ['openDirectory']
@@ -11,6 +27,21 @@ ipcMain.handle('dialog:openDirectory', async () => {
     } else {
         return filePaths[0];
     }
+});
+
+// Tính năng xóa file log từ ReactJS
+ipcMain.handle('log:clear', () => {
+    log.transports.file.getFile().clear();
+    log.info('--- FILE LOG ĐÃ ĐƯỢC LÀM SẠCH BỞI NGƯỜI DÙNG ---');
+    return true;
+});
+
+// Tính năng mở thư mục chứa file log (rất tiện để lấy file)
+ipcMain.handle('log:open', () => {
+    const { shell } = require('electron');
+    const logFilePath = log.transports.file.getFile().path;
+    shell.showItemInFolder(logFilePath);
+    return true;
 });
 
 let mainWindow;
@@ -52,11 +83,11 @@ function startBackend() {
 
     springBootProcess.stdout.on('data', (data) => {
         const logOutput = data.toString();
-        // In log ra để dễ debug
+        // In log ra để dễ debug (đã được electron-log lưu vào file)
         console.log(`[Backend]: ${logOutput}`);
 
-        // Dùng Regex tìm dòng log: "Tomcat started on port(s): 54321 (http)"
-        const portMatch = logOutput.match(/Tomcat started on port\(s\):\s*(\d+)/);
+        // Dùng Regex tìm dòng log: "Tomcat started on port(s): 54321" HOẶC "Tomcat started on port 8081"
+        const portMatch = logOutput.match(/Tomcat started on port(?:\(s\))?(?::)?\s*(\d+)/);
         
         if (portMatch) {
             const actualPort = portMatch[1]; // Lấy con số nhóm đầu tiên trong Regex
@@ -67,7 +98,12 @@ function startBackend() {
                 createReactWindow(actualPort);
             }
         }
-    })
+    });
+
+    // Lắng nghe cả lỗi của Spring Boot để ghi vào file log
+    springBootProcess.stderr.on('data', (data) => {
+        console.error(`[Backend Error]: ${data.toString()}`);
+    });
 }
 
 
@@ -75,6 +111,7 @@ function createReactWindow(backendPort) {
     mainWindow = new BrowserWindow({
         width: 1200,
         height: 800,
+        icon: path.join(__dirname, 'assets', 'logo-studio.png'),
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false
@@ -90,25 +127,31 @@ function createReactWindow(backendPort) {
 
 
 app.on('ready', () => {
+    log.info('Đang khởi động Backend (Spring Boot)...');
     startBackend();
+});
 
-    mainWindow = new BrowserWindow({
-        width: 1200,
-        height: 800,
-        icon: path.join(__dirname, 'assets', 'icon.ico'),
-        webPreferences: { 
-            nodeIntegration: true,
-            contextIsolation: false
-        }
-    });
-
-    // Load file giao diện ReactJS
-    mainWindow.loadFile(path.join(__dirname, 'frontend', 'index.html'));
+// Khi tất cả cửa sổ bị đóng (bấm nút X)
+app.on('window-all-closed', () => {
+    // Đảm bảo thoát hoàn toàn ứng dụng (Kể cả trên macOS)
+    app.quit();
 });
 
 // Tắt hoàn toàn Spring Boot khi đóng phần mềm
 app.on('will-quit', () => {
     if (springBootProcess) {
-        springBootProcess.kill();
+        log.info('Đang tắt Backend...');
+        if (process.platform === 'win32') {
+            const { execSync } = require('child_process');
+            try {
+                // Lệnh taskkill trên Windows để ép buộc (force) tắt cây tiến trình Java
+                execSync(`taskkill /pid ${springBootProcess.pid} /t /f`);
+            } catch (e) {
+                log.error('Lỗi khi tắt Backend:', e);
+            }
+        } else {
+            // Trên Mac/Linux, gửi tín hiệu ngắt mạnh
+            springBootProcess.kill('SIGKILL');
+        }
     }
 });
