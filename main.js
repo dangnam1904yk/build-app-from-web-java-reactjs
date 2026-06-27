@@ -75,7 +75,12 @@ function startBackend() {
             console.error("Lỗi cấp quyền thực thi cho Java:", err);
         }
     }
-    springBootProcess = spawn(javaBin, ['-jar', jarPath]);
+    // Nếu đang chạy trên macOS/Linux (máy ảo), ép nó kết nối về MySQL của máy Windows (103.87.232.1)
+    const extraArgs = process.platform !== 'win32' 
+        ? ['--spring.datasource.url=jdbc:mysql://103.87.232.1:3306/manager_studio?useSSL=false&allowPublicKeyRetrieval=true&useUnicode=true&characterEncoding=UTF-8'] 
+        : [];
+
+    springBootProcess = spawn(javaBin, ['-jar', jarPath, ...extraArgs]);
 
     // springBootProcess.stdout.on('data', (data) => {
     //     console.log(`Spring Boot: ${data}`);
